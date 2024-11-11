@@ -1,0 +1,9 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: provider
+  name: provider-controller-manager-role
+rules:
+  - apiGroups: ["proxmox.crossplane.io"]
+    resources: ["virtualmachines/status"]
+    verbs: ["get", "update", "patch"]

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-controller-manager
+  namespace: provider
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      serviceAccountName: provider-controller-manager
+      containers:
+      - name: manager
+        image: victoriaulinici/provider-proxmox:v0.0.3
+        command:
+          - /manager
+        args:
+          - --metrics-bind-address=:8443
+          - --leader-elect
+          - --health-probe-bind-address=:8082
+        env:
+          - name: PROXMOX_ENDPOINT
+            valueFrom:
+              secretKeyRef:
+                name: proxmox-credentials
+                key: endpoint
+          - name: PROXMOX_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: proxmox-credentials
+                key: username
+          - name: PROXMOX_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: proxmox-credentials
+                key: password
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi

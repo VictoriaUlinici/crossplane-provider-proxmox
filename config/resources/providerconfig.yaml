@@ -1,0 +1,9 @@
+apiVersion: proxmox.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: provider
+spec:
+  endpoint: "https://192.168.1.79:8006"
+  credentials:
+    name: proxmox-credentials
+    namespace: provider

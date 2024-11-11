@@ -1,0 +1,3 @@
+resources:
+  - config/crd/bases/proxmox.crossplane.io_virtualmachines.yaml
+  - config/crd/bases/proxmox.crossplane.io_providerconfigs.yaml
