@@ -42,7 +42,7 @@ kubectl create secret generic proxmox-credentials -n provider \
 make generate
 make manifests  
 
-### 5. Creazione delò'Immagine Docker dell'ioperatore nel registro desiderato
+### 5. Creazione dell'Immagine Docker
 
 make docker-build docker-push IMG=<registry>/provider-proxmox:<tag> .
 
