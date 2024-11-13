@@ -27,40 +27,12 @@ type VirtualMachineSpec struct {
 	Scsi0   string `json:"scsi0"`   // Primary disk configuration
 	ScsiHW  string `json:"scsihw"`  // SCSI hardware type
 
-	// Proxmox VM specific configurations
-	/*
-		VMID          int    `json:"vmid"`                    // Unique VM ID in Proxmox
-		Name          string `json:"name"`                    // Name of the VM
-		Memory        int    `json:"memory"`                  // Memory in MB
-		Cores         int    `json:"cores"`                   // CPU cores
-		CPU           string `json:"cpu"`                     // CPU model (e.g., kvm64)
-		Sockets       int    `json:"sockets"`                 // CPU sockets
-		Numa          int    `json:"numa"`                    // Enable NUMA
-		OSType        string `json:"ostype"`                  // OS type (e.g., l26)
-		DiskConfig    string `json:"diskConfig,omitempty"`    // Disk config (e.g., virtio0:local-lvm,20G)
-		ScsiHardware  string `json:"scsiHardware,omitempty"`  // SCSI hardware controller (e.g., virtio-scsi-single)
-		AutoStart     bool   `json:"autoStart"`               // Enable auto-start on Proxmox boot
-		IDE2          string `json:"ide2,omitempty"`          // CD-ROM IDE configuration (e.g., local:iso/ubuntu.iso)
-		Net0          string `json:"net0"`                    // Network config (e.g., virtio,bridge=vmbr0)
-		Scsi0         string `json:"scsi0,omitempty"`         // SCSI disk config (e.g., local-lvm:20G)
-		ScsiHW        string `json:"scsihw,omitempty"`        // SCSI hardware type (e.g., virtio-scsi-pci)
-		IsoPath       string `json:"isoPath,omitempty"`       // ISO path (optional)
-		NetworkConfig string `json:"networkConfig,omitempty"` // Additional network config (if needed)
-
-		// Optional Proxmox-specific fields
-		BootDisk string `json:"bootDisk,omitempty"` // Boot disk (e.g., scsi0)
-		DiskSize string `json:"diskSize,omitempty"` // Disk size (optional)
-		CPUFlags string `json:"cpuFlags,omitempty"` // Optional CPU flags
-
-	*/
 }
 
 // VirtualMachineStatus represents the observed state of the VM.
 type VirtualMachineStatus struct {
 	xpv1.ResourceStatus `json:",inline"`
-	State               string `json:"state,omitempty"`    // Current state of the VM
-	Hostname            string `json:"hostname,omitempty"` // VM hostname
-	ID                  int    `json:"id,omitempty"`       // VM ID
+	Status              string `json:"status,omitempty"` // Current state of the VM
 }
 
 // +kubebuilder:object:root=true

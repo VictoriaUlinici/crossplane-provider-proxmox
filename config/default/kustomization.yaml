@@ -10,5 +10,5 @@ kind: Kustomization
 
 images:
 - name: controller
-  newName: victoriaulinici/provider-proxmox
-  newTag: v0.0.3
+  newName: "$(IMAGE_REPO)"
+  newTag: "$(IMAGE_TAG)"

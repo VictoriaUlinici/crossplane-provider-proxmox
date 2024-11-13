@@ -16,7 +16,7 @@ spec:
       serviceAccountName: provider-controller-manager
       containers:
       - name: manager
-        image: victoriaulinici/provider-proxmox:v0.0.3
+        image: "$(IMAGE_REPO):$(IMAGE_TAG)"
         command:
           - /manager
         args:

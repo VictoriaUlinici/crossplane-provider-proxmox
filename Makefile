@@ -1,5 +1,10 @@
-# Image URL to use all building/pushing image targets
-IMG ?= victoriaulinici/provider-proxmox:v0.0.3
+# Image repository and tag (default values)
+IMAGE_REPO ?= victoriaulinici/provider-proxmox
+IMAGE_TAG ?= v0.0.3
+
+# Use IMAGE_REPO and IMAGE_TAG to set IMG
+IMG ?= $(IMAGE_REPO):$(IMAGE_TAG)
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 

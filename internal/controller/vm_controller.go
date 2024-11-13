@@ -79,10 +79,8 @@ type external struct {
 	log    logr.Logger
 }
 
-const finalizerName = "finalizer.proxmox.crossplane.io"
-
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	// Cast la risorsa gestita a VirtualMachine
+	// Effettua il cast della risorsa gestita a VirtualMachine
 	vm, ok := mg.(*proxmoxv1alpha1.VirtualMachine)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New("managed resource is not a VirtualMachine")
@@ -90,42 +88,42 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Usa il client Proxmox per ottenere lo stato attuale della VM
 	existing, err := e.client.GetVMStatus(ctx, vm.Spec.VMID)
-	if proxmoxclient.IsNotFound(err) {
-		// La VM non esiste su Proxmox, il reconciler tenterà di crearla
-		e.log.Info("VM non trovata su Proxmox; necessaria creazione", "VMID", vm.Spec.VMID)
+
+	// If `existing` is nil, treat it as a non-existent VM
+	if proxmoxclient.IsNotFound(err) || existing == nil {
+		e.log.Info("VM not found on Proxmox; creation needed", "VMID", vm.Spec.VMID)
 		return managed.ExternalObservation{
 			ResourceExists:   false,
 			ResourceUpToDate: false,
 		}, nil
 	}
+
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "errore nel controllare lo stato della VM su Proxmox")
+		return managed.ExternalObservation{}, errors.Wrap(err, "error checking VM status on Proxmox")
 	}
 
-	// La VM esiste. Aggiorna i campi di stato con i dati attuali della risorsa su Proxmox
-	vm.Status.State = existing.Status
-	vm.Status.Hostname = existing.Hostname
-	vm.Status.ID = existing.ID
+	// Update the VM status fields with current data from Proxmox
+	vm.Status.Status = existing.Status
 
-	// Imposta lo stato "Ready" della VM in base al suo stato attuale su Proxmox
-	switch vm.Status.State {
-	case proxmoxclient.StatusRunning:
-		vm.SetConditions(xpv1.Available()) // Stato "Available" quando è in esecuzione
-	case proxmoxclient.StatusCreating:
-		vm.SetConditions(xpv1.Creating()) // Stato "Creating" durante la creazione
-	case proxmoxclient.StatusDeleting:
-		vm.SetConditions(xpv1.Deleting()) // Stato "Deleting" durante l'eliminazione
-	default:
-		vm.SetConditions(xpv1.Unavailable()) // Stato "Unavailable" se in stato sconosciuto
+	// Add finalizer if it’s missing
+	if !HasFinalizer(vm, finalizerName) {
+		AddFinalizer(vm, finalizerName)
+		if err := e.kube.Update(ctx, vm); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot add finalizer")
+		}
 	}
 
-	// Osserva se la configurazione è aggiornata confrontando lo stato attuale con quello desiderato
-	isUpToDate := existing.ConfigurationMatches(vm.Spec)
+	// Add finalizer if it’s missing
+	if !HasFinalizer(vm, finalizerName) {
+		AddFinalizer(vm, finalizerName)
+		if err := e.kube.Update(ctx, vm); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot add finalizer")
+		}
+	}
 
-	// Ritorna l'osservazione della risorsa senza innescare altre azioni
 	return managed.ExternalObservation{
 		ResourceExists:   true,
-		ResourceUpToDate: isUpToDate,
+		ResourceUpToDate: true, //implementare una logica per verificare se è aggiornato rispetto alla specifica
 	}, nil
 }
 
@@ -138,16 +136,14 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 */
 
 func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	e.log.Info("Creating VirtualMachine resource in Proxmox")
-
 	vm, ok := mg.(*proxmoxv1alpha1.VirtualMachine)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New("managed resource is not a VirtualMachine")
 	}
 
 	e.log.Info("Preparing VM creation payload", "VMID", vm.Spec.VMID, "Name", vm.Spec.Name)
+	vm.SetConditions(xpv1.Creating()) // Imposta lo stato di creazione una sola volta
 
-	// Prepare payload for Proxmox API request
 	payload := map[string]interface{}{
 		"vmid":    vm.Spec.VMID,
 		"name":    vm.Spec.Name,
@@ -163,15 +159,13 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		"scsihw":  vm.Spec.ScsiHW,
 	}
 
-	// Call Proxmox client to create VM
-	err := e.client.Create(payload)
-	if err == nil {
-		e.log.Info("VM creation initiated successfully", "VMID", vm.Spec.VMID)
-		vm.SetConditions(xpv1.Creating())
-	} else {
+	if err := e.client.Create(payload); err != nil {
 		e.log.Error(err, "Failed to create VM")
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot create VM")
 	}
-	return managed.ExternalCreation{}, errors.Wrap(err, "cannot create VM")
+
+	e.log.Info("VM creation initiated successfully", "VMID", vm.Spec.VMID)
+	return managed.ExternalCreation{}, nil
 }
 
 // Helper function to convert boolean to "0" or "1" for Proxmox
@@ -207,30 +201,36 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	e.log.Info("Deleting VirtualMachine resource in Proxmox")
 
+	// Cast the managed resource to a VirtualMachine
 	vm, ok := mg.(*proxmoxv1alpha1.VirtualMachine)
 	if !ok {
 		return managed.ExternalDelete{}, errors.New("managed resource is not a VirtualMachine")
 	}
 
-	e.log.Info("Initiating VM deletion", "VMID", vm.Spec.VMID)
+	// Set condition to indicate deletion is in progress
+	vm.SetConditions(xpv1.Deleting())
+
+	// Attempt to delete the VM from Proxmox
 	err := e.client.Delete(vm.Spec.VMID)
-	if proxmoxclient.IsNotFound(err) {
-		e.log.Info("VM already deleted in Proxmox", "VMID", vm.Spec.VMID)
-		// Rimuovi il finalizer se la VM è già cancellata
+
+	// If VM does not exist (IsNotFound error), or if deletion was successfully initiated, treat as deleted
+	if proxmoxclient.IsNotFound(err) || err == nil {
+		e.log.Info("VM deletion initiated or VM does not exist in Proxmox", "VMID", vm.Spec.VMID)
+
+		// Remove finalizer since the VM is no longer present in Proxmox
 		RemoveFinalizer(vm, finalizerName)
-		if err := e.kube.Update(ctx, vm); err != nil {
-			return managed.ExternalDelete{}, errors.Wrap(err, "failed to remove finalizer after VM deletion")
+		if updateErr := e.kube.Update(ctx, vm); updateErr != nil {
+			return managed.ExternalDelete{}, errors.Wrap(updateErr, "failed to remove finalizer after VM deletion")
 		}
+
 		return managed.ExternalDelete{}, nil
-	} else if err != nil {
-		e.log.Error(err, "Failed to delete VM", "VMID", vm.Spec.VMID)
-		return managed.ExternalDelete{}, errors.Wrap(err, "cannot delete VM")
 	}
-	// Rimuovi il finalizer dopo cancellazione con successo
-	e.log.Info("VM deletion successfully initiated", "VMID", vm.Spec.VMID)
+
+	// If VM deletion was successful, remove finalizer and update Kubernetes resource
+	e.log.Info("VM deletion initiated successfully", "VMID", vm.Spec.VMID)
 	RemoveFinalizer(vm, finalizerName)
-	if err := e.kube.Update(ctx, vm); err != nil {
-		return managed.ExternalDelete{}, errors.Wrap(err, "failed to remove finalizer after deletion")
+	if updateErr := e.kube.Update(ctx, vm); updateErr != nil {
+		return managed.ExternalDelete{}, errors.Wrap(updateErr, "failed to remove finalizer after VM deletion")
 	}
 
 	return managed.ExternalDelete{}, nil
@@ -240,6 +240,8 @@ func (e *external) Disconnect(ctx context.Context) error {
 	e.log.Info("Disconnecting from Proxmox API")
 	return nil
 }
+
+const finalizerName = "finalizer.crossplane.io"
 
 // HasFinalizer checks if the given finalizer is present in the object's metadata.
 func HasFinalizer(obj client.Object, finalizer string) bool {

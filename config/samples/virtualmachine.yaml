@@ -1,19 +1,19 @@
 apiVersion: proxmox.crossplane.io/v1alpha1
 kind: VirtualMachine
 metadata:
-  name: example
+  name: test
 spec:
   providerConfigReference:
     name: provider
-  vmid: 200                      # Unique VM ID in Proxmox
-  name: "example8"                   # VM name
+  vmid: 101                      # Unique VM ID in Proxmox
+  name: "test"                  # VM name
   memory: 2048                   # Memory size in MB
-  cores: 1                       # Number of CPU cores
-  cpu: "x86-64-v2-AES"           # CPU model
+  cores: 2                       # Number of CPU cores
+  cpu: "host"                    # CPU model
   sockets: 1                     # Number of CPU sockets
   ide2: "none,media=cdrom"       # IDE configuration for CD-ROM
   net0: "virtio,bridge=vmbr0"    # Network configuration
   numa: false                    # Disable NUMA (Proxmox expects 0 for false)
   ostype: "l26"                  # OS type (Linux)
-  scsi0: "local-lvm:32,iothread=1" # Primary disk configuration
-  scsihw: "virtio-scsi-single"   # SCSI hardware type
+  scsi0: "local-lvm:32,iothread=0" # Primary disk configuration
+  scsihw: "virtio-scsi-single"   # SCSI hardware types

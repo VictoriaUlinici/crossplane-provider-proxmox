@@ -15,6 +15,7 @@ import (
 
 func main() {
 	log.SetLogger(zap.New(zap.UseDevMode(true)))
+
 	cfg, err := config.GetConfig()
 	if err != nil {
 		panic(err)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,7 @@ const (
 	StatusDeleting = "deleting"
 )
 
+// NewClientWithCredentials authenticates with the Proxmox API and creates a new ProxmoxClient.
 func NewClientWithCredentials(endpoint, username, password string) (*ProxmoxClient, error) {
 	authURL := fmt.Sprintf("%s/api2/json/access/ticket", endpoint)
 	authPayload := fmt.Sprintf("username=%s&password=%s", username, password)
@@ -65,28 +67,7 @@ func NewClientWithCredentials(endpoint, username, password string) (*ProxmoxClie
 	}, nil
 }
 
-func (c *ProxmoxClient) HealthCheck() error {
-	url := fmt.Sprintf("%s/api2/json/nodes", c.Endpoint)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create health check request: %w", err)
-	}
-	req.Header.Set("Cookie", "PVEAuthCookie="+c.Ticket)
-	req.Header.Set("CSRFPreventionToken", c.CSRFToken)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to perform health check request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("health check failed with status code: %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
+// Request performs an API request to Proxmox and returns the response.
 func (c *ProxmoxClient) Request(method, urlPath string, payload interface{}) (*http.Response, error) {
 	url := fmt.Sprintf("%s%s", c.Endpoint, urlPath)
 	var body io.Reader
@@ -121,37 +102,31 @@ func (c *ProxmoxClient) Request(method, urlPath string, payload interface{}) (*h
 	return resp, nil
 }
 
-func (c *ProxmoxClient) GetVMStatus(ctx context.Context, vmid int) (*VMStatus, error) {
+// GetVMStatus retrieves the current status of a VM from Proxmox, directly updating VirtualMachineStatus.
+func (c *ProxmoxClient) GetVMStatus(ctx context.Context, vmid int) (*proxmoxv1alpha1.VirtualMachineStatus, error) {
 	resp, err := c.Request("GET", fmt.Sprintf("/api2/json/nodes/pve/qemu/%d/status/current", vmid), nil)
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("VM with ID %d not found", vmid)
-		}
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var statusResponse struct {
-		Data VMStatus `json:"data"`
+		Data *proxmoxv1alpha1.VirtualMachineStatus `json:"data"`
 	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&statusResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse VM status response: %w", err)
 	}
 
-	return &statusResponse.Data, nil
+	// Controlla se `data` è `null` (caso VM non trovata anche con `200 OK`)
+	if statusResponse.Data == nil {
+		return nil, errors.New("VM not found (data is null)")
+	}
+
+	return statusResponse.Data, nil
 }
 
-type VMStatus struct {
-	Status   string `json:"status"`
-	Hostname string `json:"name"`
-	ID       int    `json:"vmid"`
-}
-
-func (vs *VMStatus) ConfigurationMatches(spec proxmoxv1alpha1.VirtualMachineSpec) bool {
-	return vs.Hostname == spec.Name &&
-		vs.Status == spec.OSType // Assicurarsi che il campo `OSType` sia corretto
-}
-
+// Create creates a new VM on Proxmox with the provided configuration.
 func (c *ProxmoxClient) Create(payload map[string]interface{}) error {
 	resp, err := c.Request("POST", "/api2/json/nodes/pve/qemu", payload)
 	if err != nil {
@@ -161,6 +136,7 @@ func (c *ProxmoxClient) Create(payload map[string]interface{}) error {
 	return nil
 }
 
+// Update updates the configuration of an existing VM on Proxmox.
 func (c *ProxmoxClient) Update(vmid int, payload map[string]interface{}) error {
 	resp, err := c.Request("PUT", fmt.Sprintf("/api2/json/nodes/pve/qemu/%d/config", vmid), payload)
 	if err != nil {
@@ -170,6 +146,7 @@ func (c *ProxmoxClient) Update(vmid int, payload map[string]interface{}) error {
 	return nil
 }
 
+// Delete removes a VM from Proxmox.
 func (c *ProxmoxClient) Delete(vmid int) error {
 	resp, err := c.Request("DELETE", fmt.Sprintf("/api2/json/nodes/pve/qemu/%d", vmid), nil)
 	if err != nil {
@@ -179,6 +156,7 @@ func (c *ProxmoxClient) Delete(vmid int) error {
 	return nil
 }
 
+// IsNotFound checks if an error represents a "not found" response from Proxmox.
 func IsNotFound(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "not found")
+	return err != nil && (strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "data is null"))
 }
