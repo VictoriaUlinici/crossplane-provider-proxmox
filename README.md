@@ -1,8 +1,6 @@
-# provider-proxmox
-// TODO(user): Add simple overview of use/purpose
-
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+<<<<<<< HEAD
+# crossplane-provider-proxmox
+Questo progetto integra Proxmox come provider per Crossplane.
 
 ## Getting Started
 
@@ -62,3 +60,7 @@ kubectl apply -f config/samples/Virtualmachine.yaml
 
 
 Questo `README.md` fornisce una guida completa per l'installazione, configurazione e utilizzo del provider Proxmox per Crossplane. Contiene tutte le istruzioni necessarie per avviare e gestire il provider in un ambiente Kubernetes.
+=======
+# crossplane-provider-proxmox
+Crossplane provider for Proxmox 
+>>>>>>> 801a470948b6d0e45306e8fecae3defc1f54e8eb
